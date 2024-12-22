@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/RiichiMahjongCalculator/static/css/main.e6c13ad2.css",
+    "main.js": "/RiichiMahjongCalculator/static/js/main.1c44c23b.js",
+    "static/js/156.6b089099.chunk.js": "/RiichiMahjongCalculator/static/js/156.6b089099.chunk.js",
+    "index.html": "/RiichiMahjongCalculator/index.html",
+    "main.e6c13ad2.css.map": "/RiichiMahjongCalculator/static/css/main.e6c13ad2.css.map",
+    "main.1c44c23b.js.map": "/RiichiMahjongCalculator/static/js/main.1c44c23b.js.map",
+    "156.6b089099.chunk.js.map": "/RiichiMahjongCalculator/static/js/156.6b089099.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.1c44c23b.js"
+  ]
+}
