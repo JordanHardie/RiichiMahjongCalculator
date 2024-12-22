@@ -156,35 +156,52 @@ class MahjongCalculator {
 
         // Standard yaku
         const yakuChecks = [
+            // 1 han yaku
             { condition: conditions.riichi && conditions.isClosed, yaku: 'riichi' },
-            { condition: conditions.doubleRiichi && conditions.isClosed, yaku: 'doubleRiichi' },
-            { condition: conditions.ippatsu && conditions.isClosed, yaku: 'ippatsu' },
+            { condition: this.isTanyao(sortedHand), yaku: 'tanyao' },
             { condition: conditions.tsumo && conditions.isClosed, yaku: 'menzenTsumo' },
+            { condition: conditions.seatWind && this.hasValuedPair(patterns, conditions.seatWind), yaku: 'seatWind' },
+            { condition: conditions.prevalentWind && this.hasValuedPair(patterns, conditions.prevalentWind), yaku: 'prevalentWind' },
+            { condition: this.hasDragonPair(patterns), yaku: 'dragons' },
+            { condition: this.isPinfu(patterns, conditions), yaku: 'pinfu' },
+            { condition: this.isIipeiko(patterns) && !this.isRyanpeikou(patterns), yaku: 'iipeiko' },
             { condition: conditions.chankan, yaku: 'chankan' },
             { condition: conditions.rinshan, yaku: 'rinshan' },
             { condition: conditions.haitei, yaku: 'haitei' },
             { condition: conditions.houtei, yaku: 'houtei' },
-            { condition: conditions.threePlayer && conditions.hasKita, yaku: 'kita' },
-            { condition: this.isTanyao(sortedHand), yaku: 'tanyao' },
-            { condition: this.isPinfu(patterns, conditions), yaku: 'pinfu' },
-            { condition: this.isIipeiko(patterns) && !this.isRyanpeikou(patterns), yaku: 'iipeiko' },
-            { condition: this.isRyanpeikou(patterns), yaku: 'ryanpeikou' },
+            { condition: conditions.ippatsu && conditions.isClosed, yaku: 'ippatsu' },
+
+            // 2 han yaku
+            { condition: conditions.doubleRiichi && conditions.isClosed, yaku: 'doubleRiichi' },
+            { condition: this.isSanshokuDouko(patterns), yaku: 'sanshokuDouko' },
+            { condition: this.isSankantsu(patterns), yaku: 'sankantsu' },
             { condition: this.isToitoi(patterns), yaku: 'toitoi' },
             { condition: this.isSanankou(patterns), yaku: 'sanankou' },
-            { condition: this.isSankantsu(patterns), yaku: 'sankantsu' },
-            { condition: this.isHonitsu(sortedHand) && !this.isChinitsu(sortedHand), yaku: 'honitsu' },
-            { condition: this.isChinitsu(sortedHand), yaku: 'chinitsu' },
-            { condition: this.isSanshokuDoujun(patterns), yaku: 'sanshokuDoujun' },
-            { condition: this.isIttsuu(patterns), yaku: 'ittsuu' },
-            { condition: this.isChanta(patterns) && !this.isJunchan(patterns), yaku: 'chanta' },
-            { condition: this.isJunchan(patterns), yaku: 'junchan' },
-            { condition: this.isHonroutou(patterns), yaku: 'honroutou' },
             { condition: this.isShousangen(patterns), yaku: 'shousangen' },
+            { condition: this.isHonroutou(patterns), yaku: 'honroutou' },
             { condition: this.isChiitoi(sortedHand), yaku: 'chiitoi' },
-            { condition: this.isSanshokuDouko(patterns), yaku: 'sanshokuDouko' },
-            { condition: conditions.seatWind && this.hasValuedPair(patterns, conditions.seatWind), yaku: 'seatWind' },
-            { condition: conditions.prevalentWind && this.hasValuedPair(patterns, conditions.prevalentWind), yaku: 'prevalentWind' },
-            { condition: this.hasDragonPair(patterns), yaku: 'dragons' }
+            { condition: this.isChanta(patterns) && !this.isJunchan(patterns), yaku: 'chanta' },
+            { condition: this.isIttsuu(patterns), yaku: 'ittsuu' },
+            { condition: this.isSanshokuDoujun(patterns), yaku: 'sanshokuDoujun' },
+
+            // 3 han yaku
+            { condition: this.isRyanpeikou(patterns), yaku: 'ryanpeikou' },
+            { condition: this.isJunchan(patterns), yaku: 'junchan' },
+            { condition: this.isHonitsu(sortedHand) && !this.isChinitsu(sortedHand), yaku: 'honitsu' },
+
+            // 6 han yaku
+            { condition: this.isChinitsu(sortedHand), yaku: 'chinitsu' },
+
+            // 13 han yaku
+            { condition: this.isKokushi(sortedHand), yaku: 'kokushi' },
+            { condition: this.isSuuankou(patterns), yaku: 'suuankou' },
+            { condition: this.isDaisangen(patterns), yaku: 'daisangen' },
+            { condition: this.isChuuren(sortedHand), yaku: 'chuuren' },
+            { condition: this.isTsuuiisou(patterns), yaku: 'tsuuiisou' },
+            { condition: this.isChinroutou(patterns), yaku: 'chinroutou' },
+            { condition: this.isRyuuiisou(patterns), yaku: 'ryuuiisou' },
+            { condition: this.isShousuushii(patterns), yaku: 'shousuushii' },
+            { condition: this.isDaisuushii(patterns), yaku: 'daisuushii' }
         ];
 
         yakuChecks.forEach(({ condition, yaku }) => {
@@ -213,6 +230,241 @@ class MahjongCalculator {
 
             return !isEdgeWait && !isClosed;
         });
+    }
+
+    isSanshokuDoujun(patterns) {
+        return patterns.some(pattern => {
+            const sequences = pattern.sets.filter(set => set.type === 'sequence');
+            return sequences.some(seq1 => 
+                sequences.some(seq2 => 
+                    sequences.some(seq3 => 
+                        seq1.tiles[0].suit !== seq2.tiles[0].suit &&
+                        seq2.tiles[0].suit !== seq3.tiles[0].suit &&
+                        seq1.tiles[0].suit !== seq3.tiles[0].suit &&
+                        seq1.tiles[0].number === seq2.tiles[0].number &&
+                        seq2.tiles[0].number === seq3.tiles[0].number
+                    )
+                )
+            );
+        });
+    }
+
+    isIttsuu(patterns) {
+        return patterns.some(pattern => {
+            const sequences = pattern.sets.filter(set => set.type === 'sequence');
+            return sequences.some(seq1 => 
+                sequences.some(seq2 => 
+                    sequences.some(seq3 => 
+                        seq1.tiles[0].number === 1 &&
+                        seq2.tiles[0].number === 4 &&
+                        seq3.tiles[0].number === 7 &&
+                        seq1.tiles[0].suit === seq2.tiles[0].suit &&
+                        seq2.tiles[0].suit === seq3.tiles[0].suit
+                    )
+                )
+            );
+        });
+    }
+
+    isChanta(patterns) {
+        return patterns.some(pattern => 
+            pattern.sets.every(set => {
+                const hasTerminal = set.tiles.some(t => 
+                    t.type === 'honor' || t.number === 1 || t.number === 9
+                );
+                const hasSimple = set.tiles.some(t => 
+                    t.type !== 'honor' && t.number > 1 && t.number < 9
+                );
+                return hasTerminal && hasSimple;
+            }) &&
+            pattern.pairs[0].some(t => 
+                t.type === 'honor' || t.number === 1 || t.number === 9
+            )
+        );
+    }
+
+    isJunchan(patterns) {
+        return patterns.some(pattern => 
+            pattern.sets.every(set => {
+                const hasTerminal = set.tiles.some(t => 
+                    t.number === 1 || t.number === 9
+                );
+                const noHonors = set.tiles.every(t => t.type !== 'honor');
+                return hasTerminal && noHonors;
+            }) &&
+            pattern.pairs[0].every(t => 
+                t.type !== 'honor' && (t.number === 1 || t.number === 9)
+            )
+        );
+    }
+
+    isHonroutou(patterns) {
+        return patterns.some(pattern => 
+            pattern.sets.every(set =>
+                set.tiles.every(t => 
+                    t.type === 'honor' || t.number === 1 || t.number === 9
+                )
+            ) &&
+            pattern.pairs[0].every(t => 
+                t.type === 'honor' || t.number === 1 || t.number === 9
+            )
+        );
+    }
+
+    isShousangen(patterns) {
+        return patterns.some(pattern => {
+            const dragonSets = pattern.sets.filter(set =>
+                set.tiles.every(t => 
+                    t.type === 'honor' && ['white', 'green', 'red'].includes(t.value)
+                )
+            );
+            const dragonPair = pattern.pairs[0].every(t =>
+                t.type === 'honor' && ['white', 'green', 'red'].includes(t.value)
+            );
+            return dragonSets.length === 2 && dragonPair;
+        });
+    }
+
+    isChiitoi(hand) {
+        if (hand.length !== 14) return false;
+        const pairs = [];
+        for (let i = 0; i < hand.length; i += 2) {
+            if (!this.sameTile(hand[i], hand[i + 1])) return false;
+            if (pairs.some(p => this.sameTile(p[0], hand[i]))) return false;
+            pairs.push([hand[i], hand[i + 1]]);
+        }
+        return pairs.length === 7;
+    }
+
+    isSanshokuDouko(patterns) {
+        return patterns.some(pattern => {
+            const triplets = pattern.sets.filter(set => set.type === 'triplet');
+            return triplets.some(trip1 => 
+                triplets.some(trip2 => 
+                    triplets.some(trip3 => 
+                        trip1.tiles[0].suit !== trip2.tiles[0].suit &&
+                        trip2.tiles[0].suit !== trip3.tiles[0].suit &&
+                        trip1.tiles[0].suit !== trip3.tiles[0].suit &&
+                        trip1.tiles[0].number === trip2.tiles[0].number &&
+                        trip2.tiles[0].number === trip3.tiles[0].number
+                    )
+                )
+            );
+        });
+    }
+
+    isKokushi(hand) {
+        const requiredTiles = [
+            {type: 'honor', value: 'east'}, {type: 'honor', value: 'south'},
+            {type: 'honor', value: 'west'}, {type: 'honor', value: 'north'},
+            {type: 'honor', value: 'white'}, {type: 'honor', value: 'green'},
+            {type: 'honor', value: 'red'},
+            {suit: 'man', number: 1}, {suit: 'man', number: 9},
+            {suit: 'pin', number: 1}, {suit: 'pin', number: 9},
+            {suit: 'sou', number: 1}, {suit: 'sou', number: 9}
+        ];
+        
+        return hand.length === 14 && 
+                requiredTiles.every(req => hand.some(t => 
+                    (req.type === 'honor' && t.type === 'honor' && t.value === req.value) ||
+                    (req.suit && t.suit === req.suit && t.number === req.number)
+                ));
+    }
+    
+    isChuuren(hand) {
+        if (!this.isChinitsu(hand)) return false;
+        const suit = hand[0].suit;
+        const required = [1,1,1,2,3,4,5,6,7,8,9,9,9];
+        const counts = Array(10).fill(0);
+        hand.forEach(t => counts[t.number]++);
+        return required.every((req, i) => counts[req] >= 1);
+    }
+    
+    isSuuankou(patterns) {
+        return patterns.some(pattern =>
+            pattern.sets.filter(set => 
+                set.type === 'triplet' && set.closed
+            ).length === 4
+        );
+    }
+    
+    isDaisangen(patterns) {
+        return patterns.some(pattern => {
+            const dragonSets = pattern.sets.filter(set =>
+                set.tiles.every(t => 
+                    t.type === 'honor' && ['white', 'green', 'red'].includes(t.value)
+                )
+            );
+            return dragonSets.length === 3;
+        });
+    }
+    
+    isTsuuiisou(hand) {
+        return hand.every(t => t.type === 'honor');
+    }
+    
+    isChinroutou(hand) {
+        return hand.every(t => 
+            t.type !== 'honor' && (t.number === 1 || t.number === 9)
+        );
+    }
+    
+    isRyuuiisou(hand) {
+        const greenTiles = [
+            {suit: 'sou', number: 2},
+            {suit: 'sou', number: 3},
+            {suit: 'sou', number: 4},
+            {suit: 'sou', number: 6},
+            {suit: 'sou', number: 8},
+            {type: 'honor', value: 'green'}
+        ];
+        return hand.every(t =>
+            greenTiles.some(g =>
+                (g.type === 'honor' && t.type === 'honor' && t.value === g.value) ||
+                (g.suit && t.suit === g.suit && t.number === g.number)
+            )
+        );
+    }
+    
+    isShousuushii(patterns) {
+        const windSets = pattern => pattern.sets.filter(set =>
+            set.tiles.every(t => 
+                t.type === 'honor' && ['east', 'south', 'west', 'north'].includes(t.value)
+            )
+        );
+        
+        return patterns.some(pattern =>
+            windSets(pattern).length === 3 &&
+            pattern.pairs[0].every(t =>
+                t.type === 'honor' && ['east', 'south', 'west', 'north'].includes(t.value)
+            )
+        );
+    }
+    
+    isDaisuushii(patterns) {
+        return patterns.some(pattern =>
+            pattern.sets.filter(set =>
+                set.tiles.every(t => 
+                    t.type === 'honor' && ['east', 'south', 'west', 'north'].includes(t.value)
+                )
+            ).length === 4
+        );
+    }
+
+    hasValuedPair(patterns, wind) {
+        return patterns.some(pattern =>
+            pattern.pairs[0].every(t => 
+                t.type === 'honor' && t.value === wind
+            )
+        );
+    }
+
+    hasDragonPair(patterns) {
+        return patterns.some(pattern =>
+            pattern.pairs[0].every(t =>
+                t.type === 'honor' && ['white', 'green', 'red'].includes(t.value)
+            )
+        );
     }
 
     // Helper methods
