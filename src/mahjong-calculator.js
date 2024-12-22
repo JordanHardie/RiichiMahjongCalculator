@@ -173,7 +173,18 @@ class MahjongCalculator {
             { condition: this.isSanankou(patterns), yaku: 'sanankou' },
             { condition: this.isSankantsu(patterns), yaku: 'sankantsu' },
             { condition: this.isHonitsu(sortedHand) && !this.isChinitsu(sortedHand), yaku: 'honitsu' },
-            { condition: this.isChinitsu(sortedHand), yaku: 'chinitsu' }
+            { condition: this.isChinitsu(sortedHand), yaku: 'chinitsu' },
+            { condition: this.isSanshokuDoujun(patterns), yaku: 'sanshokuDoujun' },
+            { condition: this.isIttsuu(patterns), yaku: 'ittsuu' },
+            { condition: this.isChanta(patterns) && !this.isJunchan(patterns), yaku: 'chanta' },
+            { condition: this.isJunchan(patterns), yaku: 'junchan' },
+            { condition: this.isHonroutou(patterns), yaku: 'honroutou' },
+            { condition: this.isShousangen(patterns), yaku: 'shousangen' },
+            { condition: this.isChiitoi(sortedHand), yaku: 'chiitoi' },
+            { condition: this.isSanshokuDouko(patterns), yaku: 'sanshokuDouko' },
+            { condition: conditions.seatWind && this.hasValuedPair(patterns, conditions.seatWind), yaku: 'seatWind' },
+            { condition: conditions.prevalentWind && this.hasValuedPair(patterns, conditions.prevalentWind), yaku: 'prevalentWind' },
+            { condition: this.hasDragonPair(patterns), yaku: 'dragons' }
         ];
 
         yakuChecks.forEach(({ condition, yaku }) => {
