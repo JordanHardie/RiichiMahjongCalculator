@@ -1,3 +1,6 @@
+Riichi Mahjong Calulator © 2024 by Jordan Hardie is licensed under CC BY-NC-SA 4.0
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
