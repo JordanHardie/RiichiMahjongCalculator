@@ -75,6 +75,10 @@ class YakuDetector {
         return yakuList;
     }
 
+    getMeldTiles(melds) {
+        return melds ? melds.flatMap(meld => meld.tiles) : [];
+    }
+
     // 1 han yaku methods
     isRiichi(conditions) {
         return conditions.riichi && conditions.isClosed;

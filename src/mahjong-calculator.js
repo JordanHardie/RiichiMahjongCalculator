@@ -1,4 +1,6 @@
-class MahjongCalculator {
+import YakuDetector from './YakuDetector'
+
+    class MahjongCalculator {
     constructor() {
         this.yakuDetector = new YakuDetector();
         this.limitHands = {
@@ -10,123 +12,95 @@ class MahjongCalculator {
         };
     }
 
-    calculateFu(hand, conditions) {
-        let fu = 20; // Base fu
+    calculateScore(hand, conditions) {
+        const yakuList = this.yakuDetector.detectYaku(hand, conditions);
+        if (yakuList.length === 0) return { score: 0, yaku: [], fu: 0 };
 
+        let totalHan = yakuList.reduce((sum, yaku) => sum + this.yakuDetector.yakuList[yaku].han, 0);
+        const isYakuman = yakuList.some(yaku => this.yakuDetector.yakuList[yaku].han === 13);
+
+        const fu = isYakuman ? 0 : this.calculateFu(hand, conditions);
+        const payments = this.calculatePayments(totalHan, fu, conditions);
+
+        return {
+            score: payments.total,
+            payments,
+            yaku: yakuList.map(name => ({
+                name,
+                han: this.yakuDetector.yakuList[name].han
+            })),
+            fu,
+            totalHan
+        };
+    }
+
+    calculateFu(hand, conditions) {
+        let fu = 20;
         if (conditions.tsumo && !this.yakuDetector.isPinfu(hand, conditions)) fu += 2;
         if (conditions.isClosed) fu += 10;
 
-        hand.melds.forEach(meld => {
-            if (meld.type === 'triplet' && meld.closed) fu += 4;
-            if (meld.type === 'triplet' && !meld.closed) fu += 2;
-            if (meld.type === 'quad' && meld.closed) fu += 16;
-            if (meld.type === 'quad' && !meld.closed) fu += 8;
-
-            if (meld.isTerminalOrHonor) {
-                fu *= 2;
-            }
+        // Add fu for melds
+        conditions.melds?.forEach(meld => {
+            if (meld.type === 'triplet') fu += meld.closed ? 4 : 2;
+            if (meld.type === 'kan') fu += meld.closed ? 16 : 8;
+            if (this.isTerminalOrHonor(meld.tiles[0])) fu *= 2;
         });
 
         return Math.ceil(fu / 10) * 10;
     }
 
-    detectYaku(hand, conditions) {
-        return this.yakuDetector.detectYaku(hand, conditions);
+    isTerminalOrHonor(tile) {
+        return tile.type === 'honor' || tile.number === 1 || tile.number === 9;
     }
 
-    calculateScore(hand, conditions) {
-        const yaku = this.detectYaku(hand, conditions);
-        if (yaku.length === 0) return 0;
-
-        let totalHan = 0;
-        let isYakuman = false;
-
-        // Check if any yakuman or if total han reaches yakuman level
-        for (const yakuName of yaku) {
-            const han = this.yakuDetector.yakuList[yakuName].han;
-            if (han === 13) {
-                isYakuman = true;
-                break;
-            }
-            totalHan += han;
-        }
-
-        // Calculate fu if not yakuman
-        const fu = isYakuman ? 0 : this.calculateFu(hand, conditions);
-
-        // Determine base value
+    calculatePayments(han, fu, conditions) {
         let basePoints;
-        if (isYakuman) {
+        if (han >= 13) {
             basePoints = this.limitHands.yakuman.value;
         } else {
-            // Calculate basic points (fu × 2^(han+2))
-            let basicPoints = fu * Math.pow(2, totalHan + 2);
-
-            // Apply limits
-            if (basicPoints >= this.limitHands.yakuman.value || totalHan >= this.limitHands.yakuman.han) {
-                return this.calculatePayment(this.limitHands.yakuman.value, conditions); // Kazoe Yakuman
-            } else if (basicPoints >= this.limitHands.sanbaiman.value || totalHan >= this.limitHands.sanbaiman.han) {
+            let points = fu * Math.pow(2, han + 2);
+            if (points >= this.limitHands.yakuman.value) {
+                basePoints = this.limitHands.yakuman.value;
+            } else if (points >= this.limitHands.sanbaiman.value) {
                 basePoints = this.limitHands.sanbaiman.value;
-            } else if (basicPoints >= this.limitHands.baiman.value || totalHan >= this.limitHands.baiman.han) {
+            } else if (points >= this.limitHands.baiman.value) {
                 basePoints = this.limitHands.baiman.value;
-            } else if (basicPoints >= this.limitHands.haneman.value || totalHan >= this.limitHands.haneman.han) {
+            } else if (points >= this.limitHands.haneman.value) {
                 basePoints = this.limitHands.haneman.value;
-            } else if (basicPoints >= this.limitHands.mangan.value || totalHan >= this.limitHands.mangan.han) {
+            } else if (points >= this.limitHands.mangan.value) {
                 basePoints = this.limitHands.mangan.value;
             } else {
-                basePoints = Math.ceil(basicPoints / 100) * 100;
+                basePoints = Math.ceil(points / 100) * 100;
             }
         }
 
-        return this.calculatePayment(basePoints, conditions);
+        return this.calculateFinalPayments(basePoints, conditions);
     }
 
-    calculatePayment(basePoints, conditions) {
+    calculateFinalPayments(basePoints, conditions) {
         const payments = {
-            dealer: {
-                tsumo: { dealer: 0, nonDealer: 0 },
-                ron: 0
-            },
-            nonDealer: {
-                tsumo: { dealer: 0, nonDealer: 0 },
-                ron: 0
-            }
+            dealer: { tsumo: { dealer: 0, nonDealer: 0 }, ron: 0 },
+            nonDealer: { tsumo: { dealer: 0, nonDealer: 0 }, ron: 0 }
         };
 
-        // 3 player rules modify the payments
-        if (conditions.threePlayer) {
-            if (conditions.isDealer) {
-                if (conditions.tsumo) {
-                    payments.dealer.tsumo.nonDealer = Math.ceil(basePoints * 2 / 100) * 100;
-                } else {
-                    payments.dealer.ron = basePoints * 6;
-                }
+        const multiplier = conditions.threePlayer ? 3 / 4 : 1;
+
+        if (conditions.isDealer) {
+            if (conditions.tsumo) {
+                payments.dealer.tsumo.nonDealer = Math.ceil(basePoints * 2 * multiplier / 100) * 100;
             } else {
-                if (conditions.tsumo) {
-                    payments.nonDealer.tsumo.dealer = Math.ceil(basePoints * 2 / 100) * 100;
-                    payments.nonDealer.tsumo.nonDealer = Math.ceil(basePoints / 100) * 100;
-                } else {
-                    payments.nonDealer.ron = basePoints * 4;
-                }
+                payments.dealer.ron = basePoints * 6 * multiplier;
             }
         } else {
-            if (conditions.isDealer) {
-                if (conditions.tsumo) {
-                    payments.dealer.tsumo.nonDealer = Math.ceil(basePoints * 2 / 100) * 100;
-                } else {
-                    payments.dealer.ron = basePoints * 6;
-                }
+            if (conditions.tsumo) {
+                payments.nonDealer.tsumo.dealer = Math.ceil(basePoints * 2 * multiplier / 100) * 100;
+                payments.nonDealer.tsumo.nonDealer = Math.ceil(basePoints * multiplier / 100) * 100;
             } else {
-                if (conditions.tsumo) {
-                    payments.nonDealer.tsumo.dealer = Math.ceil(basePoints * 2 / 100) * 100;
-                    payments.nonDealer.tsumo.nonDealer = Math.ceil(basePoints / 100) * 100;
-                } else {
-                    payments.nonDealer.ron = basePoints * 4;
-                }
+                payments.nonDealer.ron = basePoints * 4 * multiplier;
             }
         }
 
-        // Add total field for convenience
+        // Calculate total
         if (conditions.tsumo) {
             if (conditions.isDealer) {
                 payments.total = payments.dealer.tsumo.nonDealer * (conditions.threePlayer ? 2 : 3);
@@ -138,7 +112,7 @@ class MahjongCalculator {
             payments.total = conditions.isDealer ? payments.dealer.ron : payments.nonDealer.ron;
         }
 
-        // Round all payments to nearest 100
+        // Round all payments
         Object.keys(payments).forEach(key => {
             if (typeof payments[key] === 'number') {
                 payments[key] = Math.round(payments[key] / 100) * 100;
@@ -148,7 +122,8 @@ class MahjongCalculator {
                         payments[key][subKey] = Math.round(payments[key][subKey] / 100) * 100;
                     } else if (typeof payments[key][subKey] === 'object') {
                         Object.keys(payments[key][subKey]).forEach(subSubKey => {
-                            payments[key][subKey][subSubKey] = Math.round(payments[key][subKey][subSubKey] / 100) * 100;
+                            payments[key][subKey][subSubKey] =
+                                Math.round(payments[key][subKey][subSubKey] / 100) * 100;
                         });
                     }
                 });

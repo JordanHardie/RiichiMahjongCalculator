@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 import MahjongCalculator from './mahjong-calculator';
+import ConditionToggle from './ConditionToggle';
+import TileSelector from './TileSelector';
+import './mahjong.css';
+
 const MahjongUI = () => {
-    const [calculator] = useState(new MahjongCalculator());
     const [hand, setHand] = useState([]);
+    const [melds, setMelds] = useState([]);
+    const [kitaCount, setKitaCount] = useState(0);
+    const [doraIndicators, setDoraIndicators] = useState([]);
+    const [meldInProgress, setMeldInProgress] = useState(null);
+    const [result, setResult] = useState(null);
     const [conditions, setConditions] = useState({
         riichi: false,
         doubleRiichi: false,
@@ -13,200 +21,227 @@ const MahjongUI = () => {
         rinshan: false,
         haitei: false,
         houtei: false,
+        isDealer: false,
         threePlayer: false,
-        hasKita: false,
-        seatWind: null,
-        prevalentWind: null,
+        seatWind: 'east',
+        prevalentWind: 'east',
         winningTile: null
     });
+    const [availableTiles, setAvailableTiles] = useState(
+        Array.from({ length: 34 }, (_, i) => ({
+            id: i,
+            count: 4,
+            type: i < 27 ? 'normal' : 'honor',
+            suit: i < 9 ? 'man' : i < 18 ? 'pin' : i < 27 ? 'sou' : null,
+            number: i < 27 ? (i % 9) + 1 : null,
+            value: i >= 27 ? ['east', 'south', 'west', 'north', 'white', 'green', 'red'][i - 27] : null
+        }))
+    );
 
-    const suits = ['man', 'pin', 'sou'];
-    const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    const honors = ['east', 'south', 'west', 'north', 'white', 'green', 'red'];
+    const calculator = new MahjongCalculator();
 
-    const addTile = (suit, number, type = 'normal') => {
-        if (hand.length >= 14) return;
-        setHand([...hand, { suit, number, type }]);
+    const getTileKey = (tile) => {
+        return tile.type === 'honor' ? tile.value : `${tile.suit}${tile.number}`;
     };
 
-    const removeTile = (index) => {
-        const newHand = [...hand];
-        newHand.splice(index, 1);
-        setHand(newHand);
+    const handleTileSelect = (tile) => {
+        if (meldInProgress) {
+            handleMeldTileSelect(tile);
+            return;
+        }
+
+        const tileIdx = availableTiles.findIndex(t =>
+            t.type === tile.type &&
+            t.suit === tile.suit &&
+            t.number === tile.number &&
+            t.value === tile.value
+        );
+
+        if (tileIdx === -1 || availableTiles[tileIdx].count === 0) return;
+
+        if (hand.length < getMaxHandLength()) {
+            setHand([...hand, tile]);
+            updateAvailableTiles(tile, -1);
+        }
     };
 
-    const toggleCondition = (condition) => {
-        setConditions(prev => ({
-            ...prev,
-            [condition]: !prev[condition]
+    const getMaxHandLength = () => {
+        const meldCount = melds.reduce((acc, meld) => {
+            if (meld.type === 'chi' || meld.type === 'pon') return acc + 3;
+            if (meld.type === 'kan') return acc + 4;
+            return acc;
+        }, 0);
+        return 14 - meldCount;
+    };
+
+    const updateAvailableTiles = (tile, change) => {
+        setAvailableTiles(prev => prev.map(t => {
+            if (t.type === tile.type &&
+                t.suit === tile.suit &&
+                t.number === tile.number &&
+                t.value === tile.value) {
+                return { ...t, count: t.count + change };
+            }
+            return t;
         }));
     };
 
-    const calculateScore = () => {
-        const yaku = calculator.detectYaku(hand, conditions);
-        return yaku.reduce((total, y) => total + y.han, 0);
+    const handleMeldTileSelect = (tile) => {
+        if (!meldInProgress) return;
+
+        const updatedMeld = { ...meldInProgress };
+        updatedMeld.tiles.push(tile);
+
+        if (updatedMeld.tiles.length === getMeldLength(updatedMeld.type)) {
+            setMelds([...melds, updatedMeld]);
+            setMeldInProgress(null);
+            updatedMeld.tiles.forEach(t => updateAvailableTiles(t, -1));
+        } else {
+            setMeldInProgress(updatedMeld);
+        }
+    };
+
+    const getMeldLength = (type) => {
+        return type === 'kan' ? 4 : 3;
+    };
+
+    const startMeld = (type) => {
+        setMeldInProgress({ type, tiles: [] });
+    };
+
+    const handleKita = () => {
+        if (kitaCount >= 4) return;
+        const northTile = availableTiles.find(t => t.type === 'honor' && t.value === 'north');
+        if (northTile && northTile.count > 0) {
+            setKitaCount(prev => prev + 1);
+            updateAvailableTiles(northTile, -1);
+        }
+    };
+
+    const handleDora = (tile) => {
+        if (doraIndicators.length >= 4) return;
+        const tileIdx = availableTiles.findIndex(t =>
+            t.type === tile.type &&
+            t.suit === tile.suit &&
+            t.number === tile.number &&
+            t.value === tile.value
+        );
+
+        if (tileIdx === -1 || availableTiles[tileIdx].count === 0) return;
+
+        setDoraIndicators([...doraIndicators, tile]);
+        updateAvailableTiles(tile, -1);
+    };
+
+    const handleCalculate = () => {
+        if (hand.length + melds.reduce((acc, m) => acc + m.tiles.length, 0) !== 14) return;
+
+        const result = calculator.calculateScore(hand, {
+            ...conditions,
+            melds,
+            kitaCount,
+            doraIndicators,
+            winningTile: hand[hand.length - 1]
+        });
+
+        setResult(result);
     };
 
     return (
-        <div className="p-4 max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow p-6">
-                <div className="mb-4">
-                    <h1 className="text-2xl font-bold">Mahjong Score Calculator</h1>
-                </div>
-
-                <div className="space-y-6">
-                    {/* Tile Selection */}
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Select Tiles</h3>
-                        <div className="space-y-2">
-                            {suits.map(suit => (
-                                <div key={suit} className="flex gap-2">
-                                    {numbers.map(num => (
-                                        <button
-                                            key={`${suit}-${num}`}
-                                            onClick={() => addTile(suit, num)}
-                                            className="w-8 h-8 border rounded hover:bg-gray-100"
-                                        >
-                                            {num}
-                                        </button>
-                                    ))}
-                                </div>
-                            ))}
-                            <div className="flex gap-2">
-                                {honors.map(honor => (
-                                    <button
-                                        key={honor}
-                                        onClick={() => addTile('honor', 0, honor)}
-                                        className="w-8 h-8 border rounded hover:bg-gray-100"
-                                    >
-                                        {honor[0].toUpperCase()}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Current Hand */}
-                    <div className="space-y-2">
-                        <h3 className="text-lg font-semibold">Current Hand ({hand.length}/14)</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {hand.map((tile, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => removeTile(index)}
-                                    className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600"
-                                >
-                                    {tile.type === 'honor' ? tile.type[0].toUpperCase() : `${tile.number}`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Conditions */}
-                    <div className="space-y-2">
-                        <h3 className="text-lg font-semibold">Conditions</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            {Object.keys(conditions).map(condition => (
-                                condition !== 'seatWind' && condition !== 'prevalentWind' && condition !== 'winningTile' && (
-                                    <div key={condition} className="flex items-center justify-between">
-                                        <span className="capitalize">{condition.replace(/([A-Z])/g, ' $1')}</span>
-                                        <input
-                                            type="checkbox"
-                                            checked={conditions[condition]}
-                                            onChange={() => toggleCondition(condition)}
-                                            className="w-4 h-4"
+        <div className="w-full min-h-screen bg-gray-100 flex justify-center">
+            <div className="w-full max-w-6xl p-8">
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
+                    <h2 className="text-2xl font-bold mb-4">Hand</h2>
+                    <div className="flex flex-wrap gap-2">
+                        {melds.map((meld, meldIdx) => (
+                            <div key={`meld-${meldIdx}`} className="flex gap-1 p-2 bg-gray-100 rounded">
+                                {meld.tiles.map((tile, tileIdx) => (
+                                    <div key={`${meldIdx}-${tileIdx}`} className="w-16">
+                                        <img
+                                            src={`/tiles/${getTileKey(tile)}.svg`}
+                                            alt={getTileKey(tile)}
+                                            className="w-full"
                                         />
                                     </div>
-                                )
+                                ))}
+                            </div>
+                        ))}
+                        <div className="flex gap-1">
+                            {hand.map((tile, idx) => (
+                                <div key={idx} className="w-16">
+                                    <img
+                                        src={`/tiles/${getTileKey(tile)}.svg`}
+                                        alt={getTileKey(tile)}
+                                        className="w-full"
+                                    />
+                                </div>
                             ))}
                         </div>
                     </div>
+                </div>
 
-                    {/* Score */}
-                    <div className="mt-4">
-                        <h3 className="text-lg font-semibold">Score</h3>
-                        <p className="text-2xl font-bold">{calculateScore()} han</p>
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
+                    <h2 className="text-2xl font-bold mb-4">Actions</h2>
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            onClick={() => startMeld('chi')}
+                            className="px-4 py-2 bg-green-500 text-white rounded"
+                        >
+                            Chi
+                        </button>
+                        <button
+                            onClick={() => startMeld('pon')}
+                            className="px-4 py-2 bg-blue-500 text-white rounded"
+                        >
+                            Pon
+                        </button>
+                        <button
+                            onClick={() => startMeld('kan')}
+                            className="px-4 py-2 bg-purple-500 text-white rounded"
+                        >
+                            Kan (Closed)
+                        </button>
+                        <button
+                            onClick={() => startMeld('kan-open')}
+                            className="px-4 py-2 bg-purple-300 text-white rounded"
+                        >
+                            Kan (Open)
+                        </button>
+                        <button
+                            onClick={handleKita}
+                            disabled={kitaCount >= 4}
+                            className="px-4 py-2 bg-yellow-500 text-white rounded disabled:opacity-50"
+                        >
+                            Kita ({kitaCount}/4)
+                        </button>
+                    </div>
+
+                    <div className="mb-4">
+                        <h3 className="text-lg font-bold mb-2">Dora Indicators ({doraIndicators.length}/4)</h3>
+                        <div className="flex gap-2">
+                            {doraIndicators.map((tile, idx) => (
+                                <div key={idx} className="w-16">
+                                    <img
+                                        src={`/tiles/${getTileKey(tile)}.svg`}
+                                        alt={getTileKey(tile)}
+                                        className="w-full"
+                                    />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    );
-        isDealer: false,
-        threePlayer: false,
-export default MahjongUI;        seatWind: 'east',
-        prevalentWind: 'east',
-        doraIndicators: [],
-        winningTile: null
-    });
-    const [result, setResult] = useState(null);
-    const calculator = new MahjongCalculator();
 
-    const handleTileSelect = (tile) => {
-        if (hand.length < 14) {
-            setHand([...hand, tile]);
-            if (hand.length === 13) {
-                setConditions(prev => ({ ...prev, winningTile: tile }));
-            }
-        }
-    };
-
-    const handleCalculate = () => {
-        if (hand.length !== 14) return;
-
-        const yakuList = calculator.detectYaku(hand, conditions);
-        const patterns = calculator.findAllCombinations(hand);
-        const fu = calculator.calculateFu({
-            melds: patterns[0]?.sets || [],
-            pairs: patterns[0]?.pairs || []
-        }, conditions);
-
-        const totalHan = yakuList.reduce((sum, yaku) => sum + yaku.han, 0);
-
-        setResult({ yakuList, fu, totalHan });
-    };
-
-    const handleClear = () => {
-        setHand([]);
-        setResult(null);
-        setConditions(prev => ({
-            ...prev,
-            winningTile: null
-        }));
-    };
-
-    return (
-        <div className="container mx-auto p-4">
-            <Card className="mb-4">
-                <div className="p-4">
-                    <h2 className="text-2xl font-bold mb-4">Selected Hand</h2>
-                    <div className="flex flex-wrap gap-2">
-                        {hand.map((tile, index) => (
-                            <div
-                                key={index}
-                                className="aspect-[2/3] relative"
-                                style={{ maxWidth: '80px', width: '100%' }}
-                            >
-                                <img
-                                    src={`/tiles/${tile.type === 'honor' ? tile.value : tile.suit + tile.number}.svg`}
-                                    alt="mahjong tile"
-                                    className="absolute inset-0 w-full h-full object-contain transform scale-75"
-                                    style={{ imageRendering: 'crisp-edges' }}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </Card>
-
-            <Card className="mb-4">
-                <div className="p-4">
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
                     <h2 className="text-2xl font-bold mb-4">Tile Selection</h2>
-                    <TileSelector onSelect={handleTileSelect} />
+                    <TileSelector
+                        availableTiles={availableTiles}
+                        onSelect={handleTileSelect}
+                        onAddDora={handleDora}
+                    />
                 </div>
-            </Card>
 
-            <Card className="mb-4">
-                <div className="p-4">
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
                     <h2 className="text-xl font-bold mb-4">Conditions</h2>
                     <div className="grid grid-cols-2 gap-2">
                         <ConditionToggle
@@ -245,15 +280,8 @@ export default MahjongUI;        seatWind: 'east',
                             value={conditions.threePlayer}
                             onChange={(value) => setConditions({
                                 ...conditions,
-                                threePlayer: value,
-                                hasKita: value ? conditions.hasKita : false
+                                threePlayer: value
                             })}
-                        />
-                        <ConditionToggle
-                            label="Kita"
-                            value={conditions.hasKita}
-                            onChange={(value) => setConditions({ ...conditions, hasKita: value })}
-                            disabled={!conditions.threePlayer}
                         />
                         <ConditionToggle
                             label="Closed Hand"
@@ -268,24 +296,32 @@ export default MahjongUI;        seatWind: 'east',
                         />
                     </div>
                 </div>
-            </Card>
 
-            <div className="flex gap-4">
-                <Button
-                    onClick={handleCalculate}
-                    className="flex-1"
-                    disabled={hand.length !== 14}
-                >
-                    Calculate
-                </Button>
-                <Button onClick={handleClear} variant="outline" className="flex-1">
-                    Clear
-                </Button>
-            </div>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleCalculate}
+                        disabled={hand.length + melds.reduce((acc, m) => acc + m.tiles.length, 0) !== 14}
+                        className="flex-1 px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
+                    >
+                        Calculate
+                    </button>
+                    <button
+                        onClick={() => {
+                            setHand([]);
+                            setMelds([]);
+                            setResult(null);
+                            setKitaCount(0);
+                            setDoraIndicators([]);
+                            setAvailableTiles(prev => prev.map(t => ({ ...t, count: 4 })));
+                        }}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded"
+                    >
+                        Clear
+                    </button>
+                </div>
 
-            {result && (
-                <Card className="mt-4">
-                    <div className="p-4">
+                {result && (
+                    <div className="bg-white rounded-lg shadow-lg p-6 mt-4">
                         <h2 className="text-xl font-bold mb-4">Result</h2>
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
@@ -301,201 +337,23 @@ export default MahjongUI;        seatWind: 'east',
                             <div>
                                 <p className="font-bold mb-2">Yaku</p>
                                 <ul className="space-y-1">
-                                    {result.yakuList.map((yaku, index) => (
+                                    {result.yaku.map((yaku, index) => (
                                         <li key={index}>
                                             {yaku.name} ({yaku.han} han)
                                         </li>
                                     ))}
                                 </ul>
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-            )}
-        </div>
-    );
-        isDealer: false,
-        threePlayer: false,
-export default MahjongCalculatorUI;        prevalentWind: 'east',
-        doraIndicators: [],
-        winningTile: null
-    });
-    const [result, setResult] = useState(null);
-    const calculator = new MahjongCalculator();
-
-    const handleTileSelect = (tile) => {
-        if (hand.length < 14) {
-            setHand([...hand, tile]);
-            if (hand.length === 13) {
-                setConditions(prev => ({ ...prev, winningTile: tile }));
-            }
-        }
-    };
-
-    const handleCalculate = () => {
-        if (hand.length !== 14) return;
-
-        const yakuList = calculator.detectYaku(hand, conditions);
-        const patterns = calculator.findAllCombinations(hand);
-        const fu = calculator.calculateFu({
-            melds: patterns[0]?.sets || [],
-            pairs: patterns[0]?.pairs || []
-        }, conditions);
-
-        const totalHan = yakuList.reduce((sum, yaku) => sum + yaku.han, 0);
-
-        setResult({ yakuList, fu, totalHan });
-    };
-
-    const handleClear = () => {
-        setHand([]);
-        setResult(null);
-        setConditions(prev => ({
-            ...prev,
-            winningTile: null
-        }));
-    };
-
-    return (
-        <div className="container mx-auto p-4">
-            <Card className="mb-4">
-                <div className="p-4">
-                    <h2 className="text-2xl font-bold mb-4">Selected Hand</h2>
-                    <div className="flex flex-wrap gap-2">
-                        {hand.map((tile, index) => (
-                            <div
-                                key={index}
-                                className="aspect-[2/3] relative"
-                                style={{ maxWidth: '80px', width: '100%' }}
-                            >
-                                <img
-                                    src={`/tiles/${tile.type === 'honor' ? tile.value : tile.suit + tile.number}.svg`}
-                                    alt="mahjong tile"
-                                    className="absolute inset-0 w-full h-full object-contain transform scale-75"
-                                    style={{ imageRendering: 'crisp-edges' }}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </Card>
-
-            <Card className="mb-4">
-                <div className="p-4">
-                    <h2 className="text-2xl font-bold mb-4">Tile Selection</h2>
-                    <TileSelector onSelect={handleTileSelect} />
-                </div>
-            </Card>
-
-            <Card className="mb-4">
-                <div className="p-4">
-                    <h2 className="text-xl font-bold mb-4">Conditions</h2>
-                    <div className="grid grid-cols-2 gap-2">
-                        <ConditionToggle
-                            label="Riichi"
-                            value={conditions.riichi}
-                            onChange={(value) => setConditions({
-                                ...conditions,
-                                riichi: value,
-                                isClosed: value ? true : conditions.isClosed
-                            })}
-                        />
-                        <ConditionToggle
-                            label="Double Riichi"
-                            value={conditions.doubleRiichi}
-                            onChange={(value) => setConditions({
-                                ...conditions,
-                                doubleRiichi: value,
-                                riichi: value ? true : conditions.riichi,
-                                isClosed: value ? true : conditions.isClosed
-                            })}
-                            disabled={!conditions.riichi}
-                        />
-                        <ConditionToggle
-                            label="Ippatsu"
-                            value={conditions.ippatsu}
-                            onChange={(value) => setConditions({ ...conditions, ippatsu: value })}
-                            disabled={!conditions.riichi}
-                        />
-                        <ConditionToggle
-                            label="Tsumo"
-                            value={conditions.tsumo}
-                            onChange={(value) => setConditions({ ...conditions, tsumo: value })}
-                        />
-                        <ConditionToggle
-                            label="Three Player"
-                            value={conditions.threePlayer}
-                            onChange={(value) => setConditions({
-                                ...conditions,
-                                threePlayer: value,
-                                hasKita: value ? conditions.hasKita : false
-                            })}
-                        />
-                        <ConditionToggle
-                            label="Kita"
-                            value={conditions.hasKita}
-                            onChange={(value) => setConditions({ ...conditions, hasKita: value })}
-                            disabled={!conditions.threePlayer}
-                        />
-                        <ConditionToggle
-                            label="Closed Hand"
-                            value={conditions.isClosed}
-                            onChange={(value) => setConditions({ ...conditions, isClosed: value })}
-                            disabled={conditions.riichi || conditions.doubleRiichi}
-                        />
-                        <ConditionToggle
-                            label="Dealer"
-                            value={conditions.isDealer}
-                            onChange={(value) => setConditions({ ...conditions, isDealer: value })}
-                        />
-                    </div>
-                </div>
-            </Card>
-
-            <div className="flex gap-4">
-                <Button
-                    onClick={handleCalculate}
-                    className="flex-1"
-                    disabled={hand.length !== 14}
-                >
-                    Calculate
-                </Button>
-                <Button onClick={handleClear} variant="outline" className="flex-1">
-                    Clear
-                </Button>
-            </div>
-
-            {result && (
-                <Card className="mt-4">
-                    <div className="p-4">
-                        <h2 className="text-xl font-bold mb-4">Result</h2>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p className="font-bold">Total Han</p>
-                                    <p>{result.totalHan}</p>
-                                </div>
-                                <div>
-                                    <p className="font-bold">Fu</p>
-                                    <p>{result.fu}</p>
-                                </div>
                             </div>
                             <div>
-                                <p className="font-bold mb-2">Yaku</p>
-                                <ul className="space-y-1">
-                                    {result.yakuList.map((yaku, index) => (
-                                        <li key={index}>
-                                            {yaku.name} ({yaku.han} han)
-                                        </li>
-                                    ))}
-                                </ul>
+                                <p className="font-bold mb-2">Score</p>
+                                <p>{result.score} points</p>
                             </div>
                         </div>
                     </div>
-                </Card>
-            )}
+                )}
+            </div>
         </div>
     );
 };
 
-export default MahjongCalculatorUI;
+export default MahjongUI;
